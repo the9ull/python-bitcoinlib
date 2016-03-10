@@ -13,6 +13,9 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import bitcoin.core
 
+if bitcoin.__file__.startswith('/home/'):
+    print('[DEBUG]: developement version')
+
 # Note that setup.py can break if __init__.py imports any external
 # dependencies, as these might not be installed when setup.py runs. In this
 # case __version__ could be moved to a separate version.py and imported here.
@@ -40,6 +43,15 @@ class TestNetParams(bitcoin.core.CoreTestNetParams):
     BASE58_PREFIXES = {'PUBKEY_ADDR':111,
                        'SCRIPT_ADDR':196,
                        'SECRET_KEY' :239}
+
+class SegNetParams(bitcoin.core.CoreTestNetParams):
+    MESSAGE_START = b'\x2e\x96\xea\xca'
+    DEFAULT_PORT = 28333
+    RPC_PORT = 28332
+    DNS_SEEDS = () # Do they exist? Why not?
+    BASE58_PREFIXES = {'PUBKEY_ADDR':30,
+                       'SCRIPT_ADDR':50,
+                       'SECRET_KEY' :158}
 
 class RegTestParams(bitcoin.core.CoreRegTestParams):
     MESSAGE_START = b'\xfa\xbf\xb5\xda'
@@ -71,6 +83,8 @@ def SelectParams(name):
         params = bitcoin.core.coreparams = MainParams()
     elif name == 'testnet':
         params = bitcoin.core.coreparams = TestNetParams()
+    elif name == 'segnet':
+        params = bitcoin.core.coreparams = SegNetParams()
     elif name == 'regtest':
         params = bitcoin.core.coreparams = RegTestParams()
     else:
