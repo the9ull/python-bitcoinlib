@@ -304,16 +304,79 @@ class CMutableTxOut(CTxOut):
         """Create a fullly mutable copy of an existing TxOut"""
         return cls(txout.nValue, txout.scriptPubKey)
 
+class CScriptWitness(ImmutableSerializable):
+    __slots__ = ['stack']
+
+    def __init__(self, stack):
+        # FIXME: I guest list of bytes for typing
+        assert isinstance(stack, list), 'TODO'
+        assert all([isinstance(x, bytes) for x in stack]), 'TODO'
+        object.__setattr__(self, 'stack', stack)
+
+    def append(self, script):
+        assert isinstance(x, bytes), 'TODO'
+        object.stack.append(script)
+
+    @classmethod
+    def stream_deserialize(cls, f):
+        size = VarIntSerializer.stream_deserialize(f)
+        stack = []
+        for _ in range(size):
+            stack.append(BytesSerializer.stream_deserialize(f))
+        return cls(stack)
+
+    def stream_serialize(self, f):
+        VarIntSerializer.stream_serialize(len(self.stack), f)
+        for wit in self.stack:
+            assert isinstance(wit, bytes), 'TODO'
+            BytesSerializer.stream_serialize(wit)
+
+
+class CTxinWitness(ImmutableSerializable):
+    __slots__ = ['scriptWitness'] # CScriptWitness
+
+    def __init__(self, scriptWitness):
+        object.__setattr__(self, 'scriptWitness', scriptWitness)
+
+    @classmethod
+    def stream_deserialize(cls, f):
+        scriptWitness = VectorSerializer.stream_deserialize(CTxinWitness, f)
+        return cls(scriptWitness)
+
+    def stream_serialize(self, f):
+        VectorSerializer.stream_serialize(CTxinWitness, self.scriptWitness, f)
+
+class CTxWitness(ImmutableSerializable):
+    __slots__ = ['vtxinwit']
+
+    def __init__(self, vtxinwit):
+        object.__setattr__(self, 'vtxinwit', vtxinwit)
+
+    @classmethod
+    def stream_deserialize(cls, f, vinsize):
+        vtxinwit = []
+        for _ in range(vinsize):
+            vtxinwit.append(CTxinWitness.stream_deserialize(f))
+        return cls(vtxinwit)
+
+    def stream_serialize(self, f):
+        for txinwit in self.vtxinwit:
+            VectorSerializer.stream_serialize(CTxinWitness, txinwit, f)
+
+    def __repr__(self):
+        raise NotImplementedError
+
 class CTransaction(ImmutableSerializable):
     """A transaction"""
-    __slots__ = ['nVersion', 'vin', 'vout', 'nLockTime']
+    __slots__ = ['nVersion', 'flag', 'vin', 'vout', 'witness', 'nLockTime']
 
-    def __init__(self, vin=(), vout=(), nLockTime=0, nVersion=1):
+    def __init__(self, vin=(), vout=(), witness=(), nLockTime=0, nVersion=1, flag=1):
         """Create a new transaction
 
         vin and vout are iterables of transaction inputs and outputs
         respectively. If their contents are not already immutable, immutable
         copies will be made.
+        TODO: update
         """
         if not (0 <= nLockTime <= 0xffffffff):
             raise ValueError('CTransaction: nLockTime must be in range 0x0 to 0xffffffff; got %x' % nLockTime)
@@ -322,26 +385,54 @@ class CTransaction(ImmutableSerializable):
         object.__setattr__(self, 'nVersion', nVersion)
         object.__setattr__(self, 'vin', tuple(CTxIn.from_txin(txin) for txin in vin))
         object.__setattr__(self, 'vout', tuple(CTxOut.from_txout(txout) for txout in vout))
+        assert witness == () or isinstance(witness, CTxWitness)
+        object.__setattr__(self, 'witness', witness)
+        object.__setattr__(self, 'flag', flag)
 
     @classmethod
     def stream_deserialize(cls, f):
+        # [nVersion][marker][flag][txins][txouts][witness][nLockTime]
+        # [nVersion][txins][txouts][nLockTime]
         nVersion = struct.unpack(b"<i", ser_read(f,4))[0]
         vin = VectorSerializer.stream_deserialize(CTxIn, f)
+        iswit = 0 == len(vin)
+        if iswit:
+            # len(vin) can't be 0, so we did not read vin, but the marker field
+            flag = struct.unpack(b"B", ser_read(f,1))[0]
+            assert flag != 0, 'Deserialization error.'
+            # Read the real field
+            vin = VectorSerializer.stream_deserialize(CTxIn, f)
+        else:
+            flag = 0
+
         vout = VectorSerializer.stream_deserialize(CTxOut, f)
+        if iswit:
+            witness = CTxWitness.stream_deserialize(f, len(vin))
+        else:
+            witness = ()
+
         nLockTime = struct.unpack(b"<I", ser_read(f,4))[0]
-        return cls(vin, vout, nLockTime, nVersion)
+        return cls(vin, vout, witness, nLockTime, nVersion, flag)
 
     def stream_serialize(self, f):
+        # [nVersion][marker][flag][txins][txouts][witness][nLockTime]
+        # [nVersion][txins][txouts][nLockTime]
         f.write(struct.pack(b"<i", self.nVersion))
+        if self.witness:
+            # Add witness
+            FLAG = 1 # FIXME: hard coded?
+            f.write(struct.pack(b"BB", 0, FLAG))  # 0x00 -> marker
         VectorSerializer.stream_serialize(CTxIn, self.vin, f)
         VectorSerializer.stream_serialize(CTxOut, self.vout, f)
+        if self.witness:
+            self.witness.stream_serialize()
         f.write(struct.pack(b"<I", self.nLockTime))
 
     def is_coinbase(self):
         return len(self.vin) == 1 and self.vin[0].prevout.is_null()
 
     def __repr__(self):
-        return "CTransaction(%r, %r, %i, %i)" % (self.vin, self.vout, self.nLockTime, self.nVersion)
+        return "CTransaction(%r, %r, %r, %i, %i, %i)" % (self.vin, self.vout, self.witness, self.nLockTime, self.nVersion, self.flag)
 
     @classmethod
     def from_tx(cls, tx):
@@ -354,7 +445,7 @@ class CTransaction(ImmutableSerializable):
             return tx
 
         else:
-            return cls(tx.vin, tx.vout, tx.nLockTime, tx.nVersion)
+            return cls(tx.vin, tx.vout, tx.witness, tx.nLockTime, tx.nVersion, tx.flag)
 
 
 @__make_mutable
@@ -362,7 +453,7 @@ class CMutableTransaction(CTransaction):
     """A mutable transaction"""
     __slots__ = []
 
-    def __init__(self, vin=None, vout=None, nLockTime=0, nVersion=1):
+    def __init__(self, vin=None, vout=None, witness=None, nLockTime=0, nVersion=1, flag=1):
         if not (0 <= nLockTime <= 0xffffffff):
             raise ValueError('CTransaction: nLockTime must be in range 0x0 to 0xffffffff; got %x' % nLockTime)
         self.nLockTime = nLockTime
@@ -374,15 +465,17 @@ class CMutableTransaction(CTransaction):
         if vout is None:
             vout = []
         self.vout = vout
+        self.witness = witness
         self.nVersion = nVersion
+        self.flag = flag
 
     @classmethod
     def from_tx(cls, tx):
         """Create a fully mutable copy of a pre-existing transaction"""
         vin = [CMutableTxIn.from_txin(txin) for txin in tx.vin]
         vout = [CMutableTxOut.from_txout(txout) for txout in tx.vout]
-
-        return cls(vin, vout, tx.nLockTime, tx.nVersion)
+        # FIXME: should I create Mutable witness? I don't know what this means
+        return cls(vin, vout, tx.witness, tx.nLockTime, tx.nVersion, tx.flag)
 
 
 
