@@ -29,6 +29,7 @@ import struct
 
 import bitcoin.core
 import bitcoin.core._bignum
+from bitcoin.core.serialize import BytesSerializer
 
 MAX_SCRIPT_SIZE = 10000
 MAX_SCRIPT_ELEMENT_SIZE = 520
@@ -918,6 +919,137 @@ def SignatureHash(script, txTo, inIdx, hashtype):
     return h
 
 
+def RawSegwit0SignatureHash(script, txTo, inIdx, amount, hashtype):
+    """Consensus-correct SignatureHash
+
+    Returns (hash, err) to precisely match the consensus-critical behavior of
+    the SIGHASH_SINGLE bug. (inIdx is *not* checked for validity)
+
+    If you're just writing wallet software you probably want SignatureHash()
+    instead.
+
+    Ref: https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki
+    """
+    HASH_ONE = b'\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+
+    if inIdx >= len(txTo.vin):
+        return (HASH_ONE, "inIdx %d out of range (%d)" % (inIdx, len(txTo.vin)))
+    txtmp = bitcoin.core.CMutableTransaction.from_tx(txTo)
+
+    # Reusable parts for all the tx.
+    # FIXME Compute them here is not a great idea
+    hashPrevouts = b'\x00' * 32
+    hashSequence = b'\x00' * 32
+    hashOutputs = b'\x00' * 32
+
+    if not hashtype & SIGHASH_ANYONECANPAY:
+        data = []
+        for vini in txTo.vin:
+            data.append(vini.prevout)  # TODO: serialize
+        hashPrevouts = bitcoin.core.Hash(b''.join(data))
+
+    if not hashtype & SIGHASH_ANYONECANPAY and hashtype & 0x1f not in (SIGHASH_SINGLE, SIGHASH_NONE):
+        data = []
+        for vini in txTo.vin:
+            data.append(vini.nSequence)
+        hashSequence = bitcoin.core.Hash(b''.join(data))
+
+    if hashtype & 0x1f not in (SIGHASH_SINGLE, SIGHASH_NONE):
+        data = []
+        for vouti in txTo.vout:
+            data.append(vouti)  # Serialize this using the tx serialization rules. TODO serialize
+        hashOutputs = bitcoin.core.Hash(b''.join(data))
+    elif hashtype & 0x1f == SIGHASH_SINGLE and inIdx < len(txTo.vout):
+        hashOutputs = bitcoin.core.Hash(txTo.vout[inIdx])  # TODO: serialize
+
+    data = []
+
+    data.append(struct.pack(b'<I', txTo.nVersion))
+    data.append(hashPrevouts)
+    data.append(hashSequence)
+    # The input being signed (replacing the scriptSig with scriptCode + amount)
+    # The prevout may already be contained in hashPrevout, and the nSequence
+    # may already be contain in hashSequence.
+    #ss << txTo.vin[nIn].prevout;
+
+    # data.append(txTo.vin[inIdx].prevout)  # TODO serialize
+    # Split: TODO temporary
+    data.append(txTo.vin[inIdx].prevout.hash)
+    data.append(struct.pack(b'<I', txTo.vin[inIdx].prevout.n))
+    # ss << static_cast<const CScriptBase&>(scriptCode);
+    data.append(BytesSerializer.serialize(script))  # TODO Remember: OP_CODESEPERATOR is not supported
+
+    # ss << amount;
+    data.append(struct.pack(b'<Q', amount))
+    # ss << txTo.vin[nIn].nSequence;
+    data.append(struct.pack(b'<I', txTo.vin[inIdx].nSequence))
+    # // Outputs (none/one/all, depending on flags)
+    # ss << hashOutputs;
+    data.append(hashOutputs)
+    # // Locktime
+    # ss << txTo.nLockTime;
+    data.append(struct.pack(b'<I', txTo.nLockTime))
+    # // Sighash type
+    # ss << nHashType;
+    data.append(struct.pack(b'<I', hashtype))
+
+    return (bitcoin.core.Hash(b''.join(data)), None)
+
+
+    # -^- NEW -^-
+
+    for txin in txtmp.vin:
+        txin.scriptSig = b''
+    txtmp.vin[inIdx].scriptSig = FindAndDelete(script, CScript([OP_CODESEPARATOR]))
+
+    if (hashtype & 0x1f) == SIGHASH_NONE:
+        txtmp.vout = []
+
+        for i in range(len(txtmp.vin)):
+            if i != inIdx:
+                txtmp.vin[i].nSequence = 0
+
+    elif (hashtype & 0x1f) == SIGHASH_SINGLE:
+        outIdx = inIdx
+        if outIdx >= len(txtmp.vout):
+            return (HASH_ONE, "outIdx %d out of range (%d)" % (outIdx, len(txtmp.vout)))
+
+        tmp = txtmp.vout[outIdx]
+        txtmp.vout = []
+        for i in range(outIdx):
+            txtmp.vout.append(bitcoin.core.CTxOut())
+        txtmp.vout.append(tmp)
+
+        for i in range(len(txtmp.vin)):
+            if i != inIdx:
+                txtmp.vin[i].nSequence = 0
+
+    if hashtype & SIGHASH_ANYONECANPAY:
+        tmp = txtmp.vin[inIdx]
+        txtmp.vin = []
+        txtmp.vin.append(tmp)
+
+    s = txtmp.serialize()
+    s += struct.pack(b"<I", hashtype)
+
+    hash = bitcoin.core.Hash(s)
+
+    return (hash, None)
+
+
+def Segwit0SignatureHash(script, txTo, inIdx, amount, hashtype):
+    """Calculate a signature hash
+
+    'Cooked' version that checks if inIdx is out of bounds - this is *not*
+    consensus-correct behavior, but is what you probably want for general
+    wallet use.
+    """
+    (h, err) = RawSegwit0SignatureHash(script, txTo, inIdx, amount, hashtype)
+    if err is not None:
+        raise ValueError(err)
+    return h
+
+
 __all__ = (
         'MAX_SCRIPT_SIZE',
         'MAX_SCRIPT_ELEMENT_SIZE',
@@ -1061,6 +1193,7 @@ __all__ = (
         'SIGHASH_ANYONECANPAY',
         'FindAndDelete',
         'RawSignatureHash',
+        'Segwit0SignatureHash',
         'SignatureHash',
         'IsLowDERSignature',
 )
