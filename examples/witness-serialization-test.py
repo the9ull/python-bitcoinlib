@@ -95,7 +95,8 @@ tx = CMutableTransaction([txin], [txout])
 # corresponding SignatureHash() function will use that same script when it
 # replaces the scriptSig in the transaction being hashed with the script being
 # executed.
-sighash = SignatureHash(txin_redeemScript, tx, 0, SIGHASH_ALL)
+# sighash = SignatureHash(txin_redeemScript, tx, 0, SIGHASH_ALL)
+sighash = Segwit0SignatureHash(txin_redeemScript, tx, 0, SIGHASH_ALL)
 
 # Now sign it. We have to append the type of signature we want to the end, in
 # this case the usual SIGHASH_ALL.
@@ -106,8 +107,10 @@ sig = seckey.sign(sighash) + bytes([SIGHASH_ALL])
 
 Hash1 = lambda msg: hashlib.sha256(msg).digest()  # FIXME Am I sure that this is not a Hash() call?
 
-txin.witness = CScript([OP_0, sig, txin_redeemScript])  # OP_0 → CHECKMULTISIG bug
-txin.scriptSig = CScript([OP_0, Hash1(txin_redeemScript)])  # OP_0 → Version 0 of segwit
+sign = True
+if sign:
+    txin.witness = CScript([OP_0, sig, txin_redeemScript])  # OP_0 → CHECKMULTISIG bug
+    txin.scriptSig = CScript([OP_0, Hash1(txin_redeemScript)])  # OP_0 → Version 0 of segwit
 
 # Problem: the witness is not serialized
 print('Wit:', b2x(txin.witness))

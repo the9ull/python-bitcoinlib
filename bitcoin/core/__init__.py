@@ -229,7 +229,7 @@ class CMutableTxIn(CTxIn):
     """A mutable CTxIn"""
     __slots__ = []
 
-    def __init__(self, prevout=None, scriptSig=CScript(), witness=[], nSequence = 0xffffffff):
+    def __init__(self, prevout=None, scriptSig=CScript(), witness=CScript(), nSequence = 0xffffffff):
         if not (0 <= nSequence <= 0xffffffff):
             raise ValueError('CTxIn: nSequence must be an integer between 0x0 and 0xffffffff; got %x' % nSequence)
         self.nSequence = nSequence
