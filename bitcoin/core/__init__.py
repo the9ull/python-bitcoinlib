@@ -183,7 +183,7 @@ class CTxIn(ImmutableSerializable):
     Contains the location of the previous transaction's output that it claims,
     and a signature that matches the output's public key.
     """
-    __slots__ = ['prevout', 'scriptSig', 'nSequence']
+    __slots__ = ['prevout', 'scriptSig', 'witness', 'nSequence']
 
     def __init__(self, prevout=COutPoint(), scriptSig=CScript(), nSequence = 0xffffffff):
         if not (0 <= nSequence <= 0xffffffff):
@@ -229,7 +229,7 @@ class CMutableTxIn(CTxIn):
     """A mutable CTxIn"""
     __slots__ = []
 
-    def __init__(self, prevout=None, scriptSig=CScript(), nSequence = 0xffffffff):
+    def __init__(self, prevout=None, scriptSig=CScript(), witness=[], nSequence = 0xffffffff):
         if not (0 <= nSequence <= 0xffffffff):
             raise ValueError('CTxIn: nSequence must be an integer between 0x0 and 0xffffffff; got %x' % nSequence)
         self.nSequence = nSequence
@@ -238,12 +238,13 @@ class CMutableTxIn(CTxIn):
             prevout = CMutableOutPoint()
         self.prevout = prevout
         self.scriptSig = scriptSig
+        self.witness = witness
 
     @classmethod
     def from_txin(cls, txin):
         """Create a fully mutable copy of an existing TxIn"""
         prevout = CMutableOutPoint.from_outpoint(txin.prevout)
-        return cls(prevout, txin.scriptSig, txin.nSequence)
+        return cls(prevout, txin.scriptSig, txin.witness[:], txin.nSequence)
 
 
 class CTxOut(ImmutableSerializable):
@@ -329,8 +330,7 @@ class CScriptWitness(ImmutableSerializable):
         VarIntSerializer.stream_serialize(len(self.stack), f)
         for wit in self.stack:
             assert isinstance(wit, bytes), 'TODO'
-            BytesSerializer.stream_serialize(wit)
-
+            BytesSerializer.stream_serialize(wit, f)
 
 class CTxinWitness(ImmutableSerializable):
     __slots__ = ['scriptWitness'] # CScriptWitness
@@ -340,11 +340,13 @@ class CTxinWitness(ImmutableSerializable):
 
     @classmethod
     def stream_deserialize(cls, f):
-        scriptWitness = VectorSerializer.stream_deserialize(CTxinWitness, f)
+        scriptWitness = CScriptWitness.stream_deserialize(f)
+        # scriptWitness = VectorSerializer.stream_deserialize(CTxinWitness, f)  # WRONG
         return cls(scriptWitness)
 
     def stream_serialize(self, f):
-        VectorSerializer.stream_serialize(CTxinWitness, self.scriptWitness, f)
+        self.scriptWitness.stream_serialize(f)
+        # VectorSerializer.stream_serialize(CTxinWitness, self.scriptWitness, f)  # WRONG
 
 class CTxWitness(ImmutableSerializable):
     __slots__ = ['vtxinwit']
@@ -361,7 +363,7 @@ class CTxWitness(ImmutableSerializable):
 
     def stream_serialize(self, f):
         for txinwit in self.vtxinwit:
-            VectorSerializer.stream_serialize(CTxinWitness, txinwit, f)
+            CTxinWitness.stream_serialize(txinwit, f)
 
     def __repr__(self):
         raise NotImplementedError
@@ -425,7 +427,7 @@ class CTransaction(ImmutableSerializable):
         VectorSerializer.stream_serialize(CTxIn, self.vin, f)
         VectorSerializer.stream_serialize(CTxOut, self.vout, f)
         if self.witness:
-            self.witness.stream_serialize()
+            self.witness.stream_serialize(f)
         f.write(struct.pack(b"<I", self.nLockTime))
 
     def is_coinbase(self):
@@ -651,6 +653,12 @@ class CoreTestNetParams(CoreMainParams):
     NAME = 'testnet'
     GENESIS_BLOCK = CBlock.deserialize(x('0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4adae5494dffff001d1aa4ae180101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000'))
 
+class CoreSegNetParams(CoreMainParams):
+    NAME = 'segnet'
+    # FIXME: set GENESIS_BLOCK
+    # GENESIS_BLOCK = CBlock.deserialize(x('0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4adae5494dffff001d1aa4ae180101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000'))
+
+
 class CoreRegTestParams(CoreTestNetParams):
     NAME = 'regtest'
     GENESIS_BLOCK = CBlock.deserialize(x('0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4adae5494dffff7f20020000000101000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4d04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73ffffffff0100f2052a01000000434104678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5fac00000000'))
@@ -671,6 +679,8 @@ def _SelectCoreParams(name):
         coreparams = CoreMainParams()
     elif name == 'testnet':
         coreparams = CoreTestNetParams()
+    elif name == 'segnet':
+        coreparams = CoreSegNetParams()
     elif name == 'regtest':
         coreparams = CoreRegTestParams()
     else:
@@ -855,6 +865,9 @@ __all__ = (
         'CMutableTxIn',
         'CTxOut',
         'CMutableTxOut',
+        'CScriptWitness',
+        'CTxinWitness',
+        'CTxWitness',
         'CTransaction',
         'CMutableTransaction',
         'CBlockHeader',
