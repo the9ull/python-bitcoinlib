@@ -45,7 +45,6 @@ if sys.argv[1:]:
     sys.exit(0)
 
 
-
 # Create the (in)famous correct brainwallet secret key.
 h = hashlib.sha256(b'correct horse battery staple').digest()
 seckey = CBitcoinSecret.from_secret_bytes(h)
@@ -64,7 +63,7 @@ txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()
 # Convert the P2SH scriptPubKey to a base58 Bitcoin address and print it.
 # You'll need to send some funds to it to create a txout to spend.
 txin_p2sh_address = CBitcoinAddress.from_scriptPubKey(txin_scriptPubKey)
-print('Pay to:',str(txin_p2sh_address))
+print('Pay to:', str(txin_p2sh_address))
 
 # Same as the txid:vout the createrawtransaction RPC call requires
 #
@@ -84,7 +83,7 @@ txin = CMutableTxIn(COutPoint(txid, vout))
 
 # Create the txout. This time we create the scriptPubKey from a Bitcoin
 # address.
-txout = CMutableTxOut(0.000009*COIN, CBitcoinAddress('DBbMDdC9jHs9azYdME9xvdwSiiJn45Yyvf').to_scriptPubKey())
+txout = CMutableTxOut(int(0.000001*COIN), CBitcoinAddress('DBbMDdC9jHs9azYdME9xvdwSiiJn45Yyvf').to_scriptPubKey())
 
 # Create the unsigned transaction.
 tx = CMutableTransaction([txin], [txout])
@@ -96,7 +95,7 @@ tx = CMutableTransaction([txin], [txout])
 # replaces the scriptSig in the transaction being hashed with the script being
 # executed.
 # sighash = SignatureHash(txin_redeemScript, tx, 0, SIGHASH_ALL)
-sighash = Segwit0SignatureHash(txin_redeemScript, tx, 0, SIGHASH_ALL)
+sighash = Segwit0SignatureHash(txin_redeemScript, tx, 0, int(.00001*COIN), SIGHASH_ALL)
 
 # Now sign it. We have to append the type of signature we want to the end, in
 # this case the usual SIGHASH_ALL.
@@ -116,6 +115,8 @@ if sign:
 print('Wit:', b2x(txin.witness))
 # because witness is in the wrong place.
 # So: let's put witness in the right place
+# TODO: this code must be inside the CTransaction definition
+assert len(txin.witness) <= 10000
 tx.witness = CTxWitness([CTxinWitness(CScriptWitness([txin.witness]))])
 
 # Verify the signature worked. This calls EvalScript() and actually executes

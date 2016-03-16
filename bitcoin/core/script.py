@@ -26,6 +26,7 @@ if sys.version > '3':
     _bord = lambda x: x
 
 import struct
+import io
 
 import bitcoin.core
 import bitcoin.core._bignum
@@ -940,19 +941,24 @@ def RawSegwit0SignatureHash(script, txTo, inIdx, amount, hashtype):
     if not hashtype & SIGHASH_ANYONECANPAY:
         data = []
         for vini in txTo.vin:
-            data.append(vini.prevout)  # TODO: serialize
+            data.append(vini.prevout.hash)  # TODO: serialize using the COutPoint primitives
+            data.append(struct.pack(b'<I', vini.prevout.n))
         hashPrevouts = bitcoin.core.Hash(b''.join(data))
 
     if not hashtype & SIGHASH_ANYONECANPAY and hashtype & 0x1f not in (SIGHASH_SINGLE, SIGHASH_NONE):
         data = []
         for vini in txTo.vin:
-            data.append(vini.nSequence)
+            data.append(struct.pack(b'<I', vini.nSequence))
+
         hashSequence = bitcoin.core.Hash(b''.join(data))
 
     if hashtype & 0x1f not in (SIGHASH_SINGLE, SIGHASH_NONE):
         data = []
+        f = io.BytesIO()
         for vouti in txTo.vout:
-            data.append(vouti)  # Serialize this using the tx serialization rules. TODO serialize
+            vouti.stream_serialize(f)  # Serialize this using the tx serialization rules. TODO serialize
+
+        data.append(f.getvalue())
         hashOutputs = bitcoin.core.Hash(b''.join(data))
     elif hashtype & 0x1f == SIGHASH_SINGLE and inIdx < len(txTo.vout):
         hashOutputs = bitcoin.core.Hash(txTo.vout[inIdx])  # TODO: serialize
