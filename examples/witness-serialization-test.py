@@ -127,16 +127,16 @@ Hash1 = lambda msg: hashlib.sha256(msg).digest()  # I am sure that this is not a
 
 sign = True
 if sign:
-    txin.witness = CScript([OP_0, sig, txin_redeemScript])  # OP_0 at start → only if CHECKMULTISIG (bug)
+    txin.witness = [b'', sig, txin_redeemScript] # CScript([OP_0, sig, txin_redeemScript])  # OP_0 at start → only if CHECKMULTISIG (bug)
     txin.scriptSig = CScript([OP_0, Hash1(txin_redeemScript)])  # OP_0 → Version 0 of segwit
 
 # Problem: the witness is not serialized
-print('Wit:', b2x(txin.witness))
+# print('Wit:', b2x(txin.witness))
 # because witness is in the wrong place.
 # So: let's put witness in the right place
 # TODO: this code must be inside the CTransaction definition
 assert len(txin.witness) <= 10000
-tx.witness = CTxWitness([CTxinWitness(CScriptWitness([txin.witness]))])
+tx.witness = CTxWitness([CTxinWitness(CScriptWitness(txin.witness))])
 
 # Verify the signature worked. This calls EvalScript() and actually executes
 # the opcodes in the scripts to see if everything worked out. If it doesn't an
