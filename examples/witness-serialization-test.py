@@ -47,11 +47,15 @@ if sys.argv[1:]:
 
 # Create the (in)famous correct brainwallet secret key.
 h = hashlib.sha256(b'correct horse battery staple').digest()
+k = hashlib.sha256(b'current morse battery stable').digest()
 seckey = CBitcoinSecret.from_secret_bytes(h)
+kpub = CBitcoinSecret.from_secret_bytes(k).pub
+# kpub = b'\x04' + b'\xfe\x69'*32  # 1+64byte # Funded transaction!
+
 
 # Create a redeemScript. Similar to a scriptPubKey the redeemScript must be
 # satisfied for the funds to be spent.
-txin_redeemScript = CScript([seckey.pub, OP_CHECKSIG])
+txin_redeemScript = CScript([OP_1, seckey.pub, kpub, OP_2, OP_CHECKMULTISIG])
 print(b2x(txin_redeemScript))
 
 # Create the magic P2SH scriptPubKey format from that redeemScript. You should
@@ -59,7 +63,7 @@ print(b2x(txin_redeemScript))
 # understand what's happening, as well as read BIP16:
 # https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki
 txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()
-
+print(b2x(txin_scriptPubKey))
 # Convert the P2SH scriptPubKey to a base58 Bitcoin address and print it.
 # You'll need to send some funds to it to create a txout to spend.
 txin_p2sh_address = CBitcoinAddress.from_scriptPubKey(txin_scriptPubKey)
@@ -71,10 +75,25 @@ print('Pay to:', str(txin_p2sh_address))
 # transaction hashes are shown little-endian rather than the usual big-endian.
 # There's also a corresponding x() convenience function that takes big-endian
 # hex and converts it to bytes.
-txid = lx('879b7f6af5f262b780d31b7b55ffadcf4a55c7785795023e2e60f15d3591b986')
+txid = lx('d7000d7b437421bbf0fcd465d28c6946954dd6faaec491c02f831ef47429c589')
 vout = 0
 # Valid input:
-# https://segnet.smartbit.com.au/tx/879b7f6af5f262b780d31b7b55ffadcf4a55c7785795023e2e60f15d3591b986
+# https://segnet.smartbit.com.au/tx/d7000d7b437421bbf0fcd465d28c6946954dd6faaec491c02f831ef47429c589
+
+#
+# {
+#       "value": 0.00010000,
+#       "n": 0,
+#       "scriptPubKey": {
+#         "asm": "OP_HASH160 93d31ad1e309a1950fbc86c711f44b5eaabf0e31 OP_EQUAL",
+#         "hex": "a91493d31ad1e309a1950fbc86c711f44b5eaabf0e3187",
+#         "reqSigs": 1,
+#         "type": "scripthash",
+#         "addresses": [
+#           "MMNnTSnrzFijzyJUYiYRzYbjjZK8wLSn9B"
+#         ]
+#       }
+# }
 
 # Create the txin structure, which includes the outpoint. The scriptSig
 # defaults to being empty.
@@ -104,11 +123,11 @@ sig = seckey.sign(sighash) + bytes([SIGHASH_ALL])
 # Set the scriptSig of our transaction input appropriately.
 # OLD >>> txin.scriptSig = CScript([sig, txin_redeemScript])
 
-Hash1 = lambda msg: hashlib.sha256(msg).digest()  # FIXME Am I sure that this is not a Hash() call?
+Hash1 = lambda msg: hashlib.sha256(msg).digest()  # I am sure that this is not a Hash() call
 
 sign = True
 if sign:
-    txin.witness = CScript([OP_0, sig, txin_redeemScript])  # OP_0 → CHECKMULTISIG bug
+    txin.witness = CScript([OP_0, sig, txin_redeemScript])  # OP_0 at start → only if CHECKMULTISIG (bug)
     txin.scriptSig = CScript([OP_0, Hash1(txin_redeemScript)])  # OP_0 → Version 0 of segwit
 
 # Problem: the witness is not serialized
