@@ -58,11 +58,23 @@ kpub = CBitcoinSecret.from_secret_bytes(k).pub
 txin_redeemScript = CScript([OP_1, seckey.pub, kpub, OP_2, OP_CHECKMULTISIG])
 print(b2x(txin_redeemScript))
 
+Hash1 = lambda msg: hashlib.sha256(msg).digest()
+
+def make_scritpSig(redeemScript):
+    # OP_0 → Version 0 of segwit
+    return CScript([ CScript([OP_0, Hash1(redeemScript)]) ])
+
+def make_scriptPubKey(scriptSig):
+    return CScript([OP_HASH160, bitcoin.core.Hash160(scriptSig), OP_EQUAL])
+
 # Create the magic P2SH scriptPubKey format from that redeemScript. You should
 # look at the CScript.to_p2sh_scriptPubKey() function in bitcoin.core.script to
 # understand what's happening, as well as read BIP16:
 # https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki
-txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()
+
+# txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()  # old and wrong
+txin_scriptSig = make_scritpSig(txin_redeemScript)
+txin_scriptPubKey = make_scriptPubKey(txin_scriptSig)
 print(b2x(txin_scriptPubKey))
 # Convert the P2SH scriptPubKey to a base58 Bitcoin address and print it.
 # You'll need to send some funds to it to create a txout to spend.
@@ -123,12 +135,10 @@ sig = seckey.sign(sighash) + bytes([SIGHASH_ALL])
 # Set the scriptSig of our transaction input appropriately.
 # OLD >>> txin.scriptSig = CScript([sig, txin_redeemScript])
 
-Hash1 = lambda msg: hashlib.sha256(msg).digest()  # I am sure that this is not a Hash() call
-
 sign = True
 if sign:
     txin.witness = [b'', sig, txin_redeemScript] # CScript([OP_0, sig, txin_redeemScript])  # OP_0 at start → only if CHECKMULTISIG (bug)
-    txin.scriptSig = CScript([OP_0, Hash1(txin_redeemScript)])  # OP_0 → Version 0 of segwit
+    txin.scriptSig = txin_scriptSig
 
 # Problem: the witness is not serialized
 # print('Wit:', b2x(txin.witness))
