@@ -311,12 +311,12 @@ class CScriptWitness(ImmutableSerializable):
     def __init__(self, stack):
         # FIXME: I guest list of bytes for typing
         assert isinstance(stack, list), 'TODO'
-        assert all([isinstance(x, bytes) for x in stack]), 'TODO'
+        assert all([isinstance(y, bytes) for y in stack]), 'TODO'
         object.__setattr__(self, 'stack', stack)
 
     def append(self, script):
         assert isinstance(x, bytes), 'TODO'
-        object.stack.append(script)
+        self.stack.append(script)  # FIXME: object.stack were here. Error‽
 
     @classmethod
     def stream_deserialize(cls, f):
@@ -331,6 +331,15 @@ class CScriptWitness(ImmutableSerializable):
         for wit in self.stack:
             assert isinstance(wit, bytes), 'TODO'
             BytesSerializer.stream_serialize(wit, f)
+
+    def __repr__(self):
+        return 'CScriptWitness(' + ', '.join([self.repr_element(y) for y in self.stack]) + ')'
+
+    def repr_element(self, e):
+        # return CScript(e).__repr__()
+        if e:
+            return b2x(e)
+        return 'OP_0'
 
 class CTxinWitness(ImmutableSerializable):
     __slots__ = ['scriptWitness'] # CScriptWitness
@@ -347,6 +356,9 @@ class CTxinWitness(ImmutableSerializable):
     def stream_serialize(self, f):
         self.scriptWitness.stream_serialize(f)
         # VectorSerializer.stream_serialize(CTxinWitness, self.scriptWitness, f)  # WRONG
+
+    def __repr__(self):
+        return 'CTxinWitness(%r)' % self.scriptWitness
 
 class CTxWitness(ImmutableSerializable):
     __slots__ = ['vtxinwit']
@@ -366,7 +378,7 @@ class CTxWitness(ImmutableSerializable):
             CTxinWitness.stream_serialize(txinwit, f)
 
     def __repr__(self):
-        raise NotImplementedError
+        return 'CTxWitness(' + ', '.join(["%r" % txinwit for txinwit in self.vtxinwit]) + ')'
 
 class CTransaction(ImmutableSerializable):
     """A transaction"""
