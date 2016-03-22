@@ -87,7 +87,8 @@ def make_scriptPubKey(redeemScript):
 # txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()  # old and wrong
 txin_scriptSig = make_scritpSig(txin_redeemScript)
 txin_scriptPubKey = make_scriptPubKey(txin_redeemScript)
-print(b2x(txin_scriptPubKey))
+print('pub', b2x(txin_scriptPubKey))
+print('sig', b2x(txin_scriptSig))
 
 assert Hash160(txin_scriptSig[1:]) == [y for y in txin_scriptPubKey][1], \
     '%s %s' % (Hash160(txin_scriptSig[1:]), [y for y in txin_scriptPubKey][1])
@@ -103,7 +104,7 @@ print('Pay to:', str(txin_p2sh_address))
 # transaction hashes are shown little-endian rather than the usual big-endian.
 # There's also a corresponding x() convenience function that takes big-endian
 # hex and converts it to bytes.
-txid = lx('d7000d7b437421bbf0fcd465d28c6946954dd6faaec491c02f831ef47429c589')
+txid = lx('736c9e4d5998fa06f8bfeec5533635de9e7936136a055fc4bff9525c8075f1ef')
 vout = 0
 # Valid input:
 # https://segnet.smartbit.com.au/tx/d7000d7b437421bbf0fcd465d28c6946954dd6faaec491c02f831ef47429c589
