@@ -50,7 +50,7 @@ h = hashlib.sha256(b'correct horse battery staple').digest()
 k = hashlib.sha256(b'current morse battery stable').digest()
 seckey = CBitcoinSecret.from_secret_bytes(h)
 kpub = CBitcoinSecret.from_secret_bytes(k).pub
-# kpub = b'\x04' + b'\xfe\x69'*32  # 1+64byte # Funded transaction!
+#kpub = b'\x04' + b'\xfe\x69'*32  # 1+64byte # Funded transaction!
 
 
 # Create a redeemScript. Similar to a scriptPubKey the redeemScript must be
@@ -60,12 +60,24 @@ print(b2x(txin_redeemScript))
 
 Hash1 = lambda msg: hashlib.sha256(msg).digest()
 
-def make_scritpSig(redeemScript):
+def make_scritpSig(redeemScript, serialize=True):
+    """
+    Make a version 0 P2SH+Segwit scriptSig.
+    The script is serialized by default, in this case the output script is
+    a single push.
+    """
     # OP_0 → Version 0 of segwit
-    return CScript([ CScript([OP_0, Hash1(redeemScript)]) ])
+    scriptSig = CScript([OP_0, Hash1(redeemScript)])
+    return CScript([scriptSig]) if serialize else scriptSig
 
-def make_scriptPubKey(scriptSig):
-    return CScript([OP_HASH160, bitcoin.core.Hash160(scriptSig), OP_EQUAL])
+def hash160_scriptSig(redeemScript):
+    """
+    The hash is produced with the non serialized version of scriptSig
+    """
+    return bitcoin.core.Hash160(make_scritpSig(redeemScript, serialize=False))
+
+def make_scriptPubKey(redeemScript):
+    return CScript([OP_HASH160, hash160_scriptSig(redeemScript), OP_EQUAL])
 
 # Create the magic P2SH scriptPubKey format from that redeemScript. You should
 # look at the CScript.to_p2sh_scriptPubKey() function in bitcoin.core.script to
@@ -74,8 +86,12 @@ def make_scriptPubKey(scriptSig):
 
 # txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()  # old and wrong
 txin_scriptSig = make_scritpSig(txin_redeemScript)
-txin_scriptPubKey = make_scriptPubKey(txin_scriptSig)
+txin_scriptPubKey = make_scriptPubKey(txin_redeemScript)
 print(b2x(txin_scriptPubKey))
+
+assert Hash160(txin_scriptSig[1:]) == [y for y in txin_scriptPubKey][1], \
+    '%s %s' % (Hash160(txin_scriptSig[1:]), [y for y in txin_scriptPubKey][1])
+
 # Convert the P2SH scriptPubKey to a base58 Bitcoin address and print it.
 # You'll need to send some funds to it to create a txout to spend.
 txin_p2sh_address = CBitcoinAddress.from_scriptPubKey(txin_scriptPubKey)
