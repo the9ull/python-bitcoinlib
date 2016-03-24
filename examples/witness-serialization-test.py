@@ -143,7 +143,9 @@ tx = CMutableTransaction([txin], [txout])
 # replaces the scriptSig in the transaction being hashed with the script being
 # executed.
 # sighash = SignatureHash(txin_redeemScript, tx, 0, SIGHASH_ALL)
-sighash = Segwit0SignatureHash(txin_redeemScript, tx, 0, int(.00001*COIN), SIGHASH_ALL)
+sighash = SignatureHash1(txin_redeemScript, tx, 0, int(.0001*COIN), SIGHASH_ALL)
+
+print('Hash to sign (the wrong one):', b2x(sighash))
 
 # Now sign it. We have to append the type of signature we want to the end, in
 # this case the usual SIGHASH_ALL.
