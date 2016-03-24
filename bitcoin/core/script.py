@@ -915,7 +915,7 @@ def SignatureHash(script, txTo, inIdx, hashtype):
     return h
 
 
-def RawSegwit0SignatureHash(script, txTo, inIdx, amount, hashtype):
+def RawSignatureHash1(script, txTo, inIdx, amount, hashtype):
     """Consensus-correct SignatureHash
 
     Returns (hash, err) to precisely match the consensus-critical behavior of
@@ -964,8 +964,9 @@ def RawSegwit0SignatureHash(script, txTo, inIdx, amount, hashtype):
         hashOutputs = bitcoin.core.Hash(txTo.vout[inIdx])  # TODO: serialize
 
     data = []
+    hash_data = lambda: bitcoin.core.Hash(b''.join(data))
 
-    data.append(struct.pack(b'<I', txTo.nVersion))
+    data.append(struct.pack(b'<i', txTo.nVersion))
     data.append(hashPrevouts)
     data.append(hashSequence)
     # The input being signed (replacing the scriptSig with scriptCode + amount)
@@ -994,58 +995,17 @@ def RawSegwit0SignatureHash(script, txTo, inIdx, amount, hashtype):
     # ss << nHashType;
     data.append(struct.pack(b'<I', hashtype))
 
-    return (bitcoin.core.Hash(b''.join(data)), None)
+    return (hash_data(), None)
 
 
-    # -^- NEW -^-
-
-    for txin in txtmp.vin:
-        txin.scriptSig = b''
-    txtmp.vin[inIdx].scriptSig = FindAndDelete(script, CScript([OP_CODESEPARATOR]))
-
-    if (hashtype & 0x1f) == SIGHASH_NONE:
-        txtmp.vout = []
-
-        for i in range(len(txtmp.vin)):
-            if i != inIdx:
-                txtmp.vin[i].nSequence = 0
-
-    elif (hashtype & 0x1f) == SIGHASH_SINGLE:
-        outIdx = inIdx
-        if outIdx >= len(txtmp.vout):
-            return (HASH_ONE, "outIdx %d out of range (%d)" % (outIdx, len(txtmp.vout)))
-
-        tmp = txtmp.vout[outIdx]
-        txtmp.vout = []
-        for i in range(outIdx):
-            txtmp.vout.append(bitcoin.core.CTxOut())
-        txtmp.vout.append(tmp)
-
-        for i in range(len(txtmp.vin)):
-            if i != inIdx:
-                txtmp.vin[i].nSequence = 0
-
-    if hashtype & SIGHASH_ANYONECANPAY:
-        tmp = txtmp.vin[inIdx]
-        txtmp.vin = []
-        txtmp.vin.append(tmp)
-
-    s = txtmp.serialize()
-    s += struct.pack(b"<I", hashtype)
-
-    hash = bitcoin.core.Hash(s)
-
-    return (hash, None)
-
-
-def Segwit0SignatureHash(script, txTo, inIdx, amount, hashtype):
+def SignatureHash1(script, txTo, inIdx, amount, hashtype):
     """Calculate a signature hash
 
     'Cooked' version that checks if inIdx is out of bounds - this is *not*
     consensus-correct behavior, but is what you probably want for general
     wallet use.
     """
-    (h, err) = RawSegwit0SignatureHash(script, txTo, inIdx, amount, hashtype)
+    (h, err) = RawSignatureHash1(script, txTo, inIdx, amount, hashtype)
     if err is not None:
         raise ValueError(err)
     return h
@@ -1190,7 +1150,7 @@ __all__ = (
         'SIGHASH_ANYONECANPAY',
         'FindAndDelete',
         'RawSignatureHash',
-        'Segwit0SignatureHash',
         'SignatureHash',
+        'SignatureHash1',
         'IsLowDERSignature',
 )
