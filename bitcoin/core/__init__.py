@@ -461,6 +461,12 @@ class CTransaction(ImmutableSerializable):
         else:
             return cls(tx.vin, tx.vout, tx.witness, tx.nLockTime, tx.nVersion, tx.flag)
 
+    def get_txid(self):
+        """The txid is computed on transaction without witness"""
+        # def __init__(self, vin=(), vout=(), witness=(), nLockTime=0, nVersion=1, flag=1):
+        tmp = CTransaction(self.vin, self.vout, (), self.nLockTime, self.nVersion, self.flag)
+        return tmp.GetHash()
+
 
 @__make_mutable
 class CMutableTransaction(CTransaction):
@@ -490,9 +496,6 @@ class CMutableTransaction(CTransaction):
         vout = [CMutableTxOut.from_txout(txout) for txout in tx.vout]
         # FIXME: should I create Mutable witness? I don't know what this means
         return cls(vin, vout, tx.witness, tx.nLockTime, tx.nVersion, tx.flag)
-
-
-
 
 class CBlockHeader(ImmutableSerializable):
     """A block header"""
