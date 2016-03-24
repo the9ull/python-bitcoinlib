@@ -46,11 +46,11 @@ if sys.argv[1:]:
 
 
 # Create the (in)famous correct brainwallet secret key.
-h = hashlib.sha256(b'correct horse battery staple').digest()
+h = hashlib.sha256(b'correct horse battery staple/1').digest()
 k = hashlib.sha256(b'current morse battery stable').digest()
 seckey = CBitcoinSecret.from_secret_bytes(h)
-kpub = CBitcoinSecret.from_secret_bytes(k).pub
-#kpub = b'\x04' + b'\xfe\x69'*32  # 1+64byte # Funded transaction!
+# kpub = CBitcoinSecret.from_secret_bytes(k).pub
+kpub = b'\x04' + b'\xfe\x69'*32  # 1+64byte # Funded transaction!
 
 
 # Create a redeemScript. Similar to a scriptPubKey the redeemScript must be
@@ -104,7 +104,7 @@ print('Pay to:', str(txin_p2sh_address))
 # transaction hashes are shown little-endian rather than the usual big-endian.
 # There's also a corresponding x() convenience function that takes big-endian
 # hex and converts it to bytes.
-txid = lx('736c9e4d5998fa06f8bfeec5533635de9e7936136a055fc4bff9525c8075f1ef')
+txid = lx('022d1cbb635efb150a2b2ff350839d208f7e9178d37f5fa1e1d69f211ce66327')
 vout = 0
 # Valid input:
 # https://segnet.smartbit.com.au/tx/d7000d7b437421bbf0fcd465d28c6946954dd6faaec491c02f831ef47429c589
@@ -145,8 +145,6 @@ tx = CMutableTransaction([txin], [txout])
 # sighash = SignatureHash(txin_redeemScript, tx, 0, SIGHASH_ALL)
 sighash = SignatureHash1(txin_redeemScript, tx, 0, int(.0001*COIN), SIGHASH_ALL)
 
-print('Hash to sign (the wrong one):', b2x(sighash))
-
 # Now sign it. We have to append the type of signature we want to the end, in
 # this case the usual SIGHASH_ALL.
 sig = seckey.sign(sighash) + bytes([SIGHASH_ALL])
@@ -174,5 +172,7 @@ tx.witness = CTxWitness([CTxinWitness(CScriptWitness(txin.witness))])
 
 # Done! Print the transaction to standard output with the bytes-to-hex
 # function.
+print('txwid', b2lx(tx.GetHash()))
+print('txid', b2lx(tx.get_txid()))
 bb = tx.serialize()
 print(b2x(bb))
