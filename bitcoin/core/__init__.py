@@ -326,7 +326,9 @@ class CScriptWitness(ImmutableSerializable):
             stack.append(BytesSerializer.stream_deserialize(f))
         return cls(stack)
 
-    def stream_serialize(self, f):
+    def stream_serialize(self, f, checksize=True):
+        if checksize:
+            self.checksize()
         VarIntSerializer.stream_serialize(len(self.stack), f)
         for wit in self.stack:
             assert isinstance(wit, bytes), 'TODO'
@@ -340,6 +342,11 @@ class CScriptWitness(ImmutableSerializable):
         if e:
             return b2x(e)
         return 'OP_0'
+
+    def checksize(self):
+        # It over estimate the VarInt size
+        if sum([len(y)+5 for y in self.stack]) > script.MAX_SCRIPT_SIZE:
+            raise ValueError("The witness script exceeds max allowed size")
 
 class CTxinWitness(ImmutableSerializable):
     __slots__ = ['scriptWitness'] # CScriptWitness
