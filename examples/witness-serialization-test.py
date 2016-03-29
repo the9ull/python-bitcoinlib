@@ -125,7 +125,7 @@ tx = CMutableTransaction([txin], [txout])
 # executed.
 # sighash = SignatureHash(txin_redeemScript, tx, 0, SIGHASH_ALL)
 
-# amount should be obtained by CoutPoint
+# amount should be obtained by COutPoint
 sighash = SignatureHash1(txin_redeemScript, tx, 0, int(.0001*COIN), SIGHASH_ALL)
 
 # Now sign it. We have to append the type of signature we want to the end, in
@@ -137,15 +137,9 @@ sig = seckey.sign(sighash) + bytes([SIGHASH_ALL])
 
 txin.scriptSig = txin_scriptSig
 witness = [b'', sig, txin_redeemScript]
-
-# Problem: the witness is not serialized
-# print('Wit:', b2x(txin.witness))
-# because witness is in the wrong place.
-# So: let's put witness in the right place
-# TODO: this code must be inside the CTransaction definition
-assert len(witness) <= 10000
 # CScript([OP_0, sig, txin_redeemScript])  # OP_0 at start → only if CHECKMULTISIG (bug)
-tx.witness = CTxWitness([CTxinWitness(CScriptWitness(witness))])
+
+tx.add_witness(witness)
 
 # Verify the signature worked. This calls EvalScript() and actually executes
 # the opcodes in the scripts to see if everything worked out. If it doesn't an
