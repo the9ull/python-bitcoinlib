@@ -65,8 +65,8 @@ print(b2x(txin_redeemScript))
 # https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki
 
 # txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()  # old and wrong
-txin_scriptSig = txin_redeemScript.to_nested_P2WSH_scritpSig()
-txin_scriptPubKey = txin_redeemScript.to_nested_P2WSH_scriptPubKey()
+txin_scriptSig = txin_redeemScript.to_nested_p2wsh_scritpSig()
+txin_scriptPubKey = txin_redeemScript.to_nested_p2wsh_scriptPubKey()
 print('pub', b2x(txin_scriptPubKey))
 print('sig', b2x(txin_scriptSig))
 
