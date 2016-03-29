@@ -864,6 +864,7 @@ def CheckBlock(block, fCheckPoW = True, fCheckMerkleRoot = True, cur_time=None):
 __all__ = (
         'Hash',
         'Hash160',
+        'Sha256',
         'COIN',
         'MAX_BLOCK_SIZE',
         'MAX_BLOCK_SIGOPS',
