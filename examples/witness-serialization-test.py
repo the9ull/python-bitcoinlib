@@ -58,26 +58,6 @@ kpub = b'\x04' + b'\xfe\x69'*32  # 1+64byte # Funded transaction!
 txin_redeemScript = CScript([OP_1, seckey.pub, kpub, OP_2, OP_CHECKMULTISIG])
 print(b2x(txin_redeemScript))
 
-Hash1 = lambda msg: hashlib.sha256(msg).digest()
-
-def make_scritpSig(redeemScript, serialize=True):
-    """
-    Make a version 0 P2SH+Segwit scriptSig.
-    The script is serialized by default, in this case the output script is
-    a single push.
-    """
-    # OP_0 → Version 0 of segwit
-    scriptSig = CScript([OP_0, Hash1(redeemScript)])
-    return CScript([scriptSig]) if serialize else scriptSig
-
-def hash160_scriptSig(redeemScript):
-    """
-    The hash is produced with the non serialized version of scriptSig
-    """
-    return bitcoin.core.Hash160(make_scritpSig(redeemScript, serialize=False))
-
-def make_scriptPubKey(redeemScript):
-    return CScript([OP_HASH160, hash160_scriptSig(redeemScript), OP_EQUAL])
 
 # Create the magic P2SH scriptPubKey format from that redeemScript. You should
 # look at the CScript.to_p2sh_scriptPubKey() function in bitcoin.core.script to
@@ -85,11 +65,12 @@ def make_scriptPubKey(redeemScript):
 # https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki
 
 # txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()  # old and wrong
-txin_scriptSig = make_scritpSig(txin_redeemScript)
-txin_scriptPubKey = make_scriptPubKey(txin_redeemScript)
+txin_scriptSig = txin_redeemScript.to_nested_P2WSH_scritpSig()
+txin_scriptPubKey = txin_redeemScript.to_nested_P2WSH_scriptPubKey()
 print('pub', b2x(txin_scriptPubKey))
 print('sig', b2x(txin_scriptSig))
 
+# TODO: move this condition to test_segwit
 assert Hash160(txin_scriptSig[1:]) == [y for y in txin_scriptPubKey][1], \
     '%s %s' % (Hash160(txin_scriptSig[1:]), [y for y in txin_scriptPubKey][1])
 

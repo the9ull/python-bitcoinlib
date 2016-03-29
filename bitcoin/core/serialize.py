@@ -44,6 +44,10 @@ def Hash160(msg):
     h.update(hashlib.sha256(msg).digest())
     return h.digest()
 
+def Sha256(msg):
+    """SHA256(msg) -> bytes"""
+    return hashlib.sha256(msg).digest()
+
 
 class SerializationError(Exception):
     """Base class for serialization errors"""
@@ -355,6 +359,7 @@ __all__ = (
         'MAX_SIZE',
         'Hash',
         'Hash160',
+        'Sha256',
         'SerializationError',
         'SerializationTruncationError',
         'DeserializationExtraDataError',
