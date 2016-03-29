@@ -357,12 +357,10 @@ class CTxinWitness(ImmutableSerializable):
     @classmethod
     def stream_deserialize(cls, f):
         scriptWitness = CScriptWitness.stream_deserialize(f)
-        # scriptWitness = VectorSerializer.stream_deserialize(CTxinWitness, f)  # WRONG
         return cls(scriptWitness)
 
     def stream_serialize(self, f):
         self.scriptWitness.stream_serialize(f)
-        # VectorSerializer.stream_serialize(CTxinWitness, self.scriptWitness, f)  # WRONG
 
     def __repr__(self):
         return 'CTxinWitness(%r)' % self.scriptWitness
@@ -503,6 +501,9 @@ class CMutableTransaction(CTransaction):
         vout = [CMutableTxOut.from_txout(txout) for txout in tx.vout]
         # FIXME: should I create Mutable witness? I don't know what this means
         return cls(vin, vout, tx.witness, tx.nLockTime, tx.nVersion, tx.flag)
+
+    def add_witness(self, stack):
+        self.witness = CTxWitness([CTxinWitness(CScriptWitness(stack))])
 
 class CBlockHeader(ImmutableSerializable):
     """A block header"""
