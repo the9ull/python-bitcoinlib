@@ -183,13 +183,12 @@ class CTxIn(ImmutableSerializable):
     Contains the location of the previous transaction's output that it claims,
     and a signature that matches the output's public key.
     """
-    __slots__ = ['prevout', 'scriptSig', 'witness', 'nSequence']
+    __slots__ = ['prevout', 'scriptSig', 'nSequence']
 
     def __init__(self, prevout=COutPoint(), scriptSig=CScript(), nSequence = 0xffffffff):
         if not (0 <= nSequence <= 0xffffffff):
             raise ValueError('CTxIn: nSequence must be an integer between 0x0 and 0xffffffff; got %x' % nSequence)
         object.__setattr__(self, 'nSequence', nSequence)
-
         object.__setattr__(self, 'prevout', prevout)
         object.__setattr__(self, 'scriptSig', scriptSig)
 
@@ -229,7 +228,7 @@ class CMutableTxIn(CTxIn):
     """A mutable CTxIn"""
     __slots__ = []
 
-    def __init__(self, prevout=None, scriptSig=CScript(), witness=CScript(), nSequence = 0xffffffff):
+    def __init__(self, prevout=None, scriptSig=CScript(), nSequence = 0xffffffff):
         if not (0 <= nSequence <= 0xffffffff):
             raise ValueError('CTxIn: nSequence must be an integer between 0x0 and 0xffffffff; got %x' % nSequence)
         self.nSequence = nSequence
@@ -238,13 +237,12 @@ class CMutableTxIn(CTxIn):
             prevout = CMutableOutPoint()
         self.prevout = prevout
         self.scriptSig = scriptSig
-        self.witness = witness
 
     @classmethod
     def from_txin(cls, txin):
         """Create a fully mutable copy of an existing TxIn"""
         prevout = CMutableOutPoint.from_outpoint(txin.prevout)
-        return cls(prevout, txin.scriptSig, txin.witness[:], txin.nSequence)
+        return cls(prevout, txin.scriptSig, txin.nSequence)
 
 
 class CTxOut(ImmutableSerializable):
@@ -478,7 +476,7 @@ class CMutableTransaction(CTransaction):
     """A mutable transaction"""
     __slots__ = []
 
-    def __init__(self, vin=None, vout=None, witness=None, nLockTime=0, nVersion=1, flag=1):
+    def __init__(self, vin=None, vout=None, witness=(), nLockTime=0, nVersion=1, flag=1):
         if not (0 <= nLockTime <= 0xffffffff):
             raise ValueError('CTransaction: nLockTime must be in range 0x0 to 0xffffffff; got %x' % nLockTime)
         self.nLockTime = nLockTime
@@ -497,10 +495,11 @@ class CMutableTransaction(CTransaction):
     @classmethod
     def from_tx(cls, tx):
         """Create a fully mutable copy of a pre-existing transaction"""
+
         vin = [CMutableTxIn.from_txin(txin) for txin in tx.vin]
         vout = [CMutableTxOut.from_txout(txout) for txout in tx.vout]
-        # FIXME: should I create Mutable witness? I don't know what this means
-        return cls(vin, vout, tx.witness, tx.nLockTime, tx.nVersion, tx.flag)
+
+        return cls(vin, vout, tx.witness[:], tx.nLockTime, tx.nVersion, tx.flag)
 
     def add_witness(self, stack):
         self.witness = CTxWitness([CTxinWitness(CScriptWitness(stack))])
