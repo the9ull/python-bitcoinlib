@@ -768,9 +768,7 @@ class CScript(bytes):
         return CScript([scriptSig]) if serialize else scriptSig
 
     def hash160_nested_p2wsh_scriptSig(self, checksize=True):
-        """
-        The hash is produced with the non serialized version of scriptSig
-        """
+        """The hash is produced with the non serialized version of scriptSig"""
         return bitcoin.core.Hash160(self.to_nested_p2wsh_scritpSig(serialize=False, checksize=checksize))
 
     def to_nested_p2wsh_scriptPubKey(self, checksize=True):
@@ -950,12 +948,12 @@ def SignatureHash(script, txTo, inIdx, hashtype):
 
 
 def RawSignatureHash1(script, txTo, inIdx, amount, hashtype):
-    """Consensus-correct SignatureHash
+    """Consensus-correct SignatureHash1
 
     Returns (hash, err) to precisely match the consensus-critical behavior of
     the SIGHASH_SINGLE bug. (inIdx is *not* checked for validity)
 
-    If you're just writing wallet software you probably want SignatureHash()
+    If you're just writing wallet software you probably want SignatureHash1()
     instead.
 
     Ref: https://github.com/bitcoin/bips/blob/master/bip-0143.mediawiki
@@ -967,7 +965,7 @@ def RawSignatureHash1(script, txTo, inIdx, amount, hashtype):
     txtmp = bitcoin.core.CMutableTransaction.from_tx(txTo)
 
     # Reusable parts for all the tx.
-    # FIXME Compute them here is not a great idea
+    # TODO: optimization. Cache these values for the current (txTo, hashtype)
     hashPrevouts = b'\x00' * 32
     hashSequence = b'\x00' * 32
     hashOutputs = b'\x00' * 32
@@ -1013,7 +1011,7 @@ def RawSignatureHash1(script, txTo, inIdx, amount, hashtype):
     data.append(txTo.vin[inIdx].prevout.hash)
     data.append(struct.pack(b'<I', txTo.vin[inIdx].prevout.n))
     # ss << static_cast<const CScriptBase&>(scriptCode);
-    data.append(BytesSerializer.serialize(script))  # TODO Remember: OP_CODESEPERATOR is not supported
+    data.append(BytesSerializer.serialize(script))  # TODO: OP_CODESEPERATOR is not supported yet
 
     # ss << amount;
     data.append(struct.pack(b'<Q', amount))

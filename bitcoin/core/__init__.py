@@ -305,17 +305,23 @@ class CMutableTxOut(CTxOut):
         return cls(txout.nValue, txout.scriptPubKey)
 
 class CScriptWitness(ImmutableSerializable):
+    """The script witness of a single transaction input (vin[i]).
+    It is compose by an ordered elements set of the stack.
+    Serialization format: the serialized elements.
+    They are serialized as byte arrays: <number of bytes as VarInt><bytes>
+    The number of elements is not serialized because it is equal to len(vin)
+    """
     __slots__ = ['stack']
 
     def __init__(self, stack):
-        # FIXME: I guest list of bytes for typing
-        assert isinstance(stack, list), 'TODO'
-        assert all([isinstance(y, bytes) for y in stack]), 'TODO'
+        assert isinstance(stack, list), 'Type error: stack is a list'
+        assert all([isinstance(y, bytes) for y in stack]), \
+            'Type error: every element of stack is a byte array'
         object.__setattr__(self, 'stack', stack)
 
     def append(self, script):
-        assert isinstance(x, bytes), 'TODO'
-        self.stack.append(script)  # FIXME: object.stack were here. Error‽
+        assert isinstance(x, bytes), 'Type error'
+        self.stack.append(script)
 
     @classmethod
     def stream_deserialize(cls, f):
@@ -330,7 +336,7 @@ class CScriptWitness(ImmutableSerializable):
             self.checksize()
         VarIntSerializer.stream_serialize(len(self.stack), f)
         for wit in self.stack:
-            assert isinstance(wit, bytes), 'TODO'
+            assert isinstance(wit, bytes), 'Type error'
             BytesSerializer.stream_serialize(wit, f)
 
     def __repr__(self):
@@ -348,7 +354,8 @@ class CScriptWitness(ImmutableSerializable):
             raise ValueError("The witness script exceeds max allowed size")
 
 class CTxinWitness(ImmutableSerializable):
-    __slots__ = ['scriptWitness'] # CScriptWitness
+    """Wrapper for the CScriptWitness object"""
+    __slots__ = ['scriptWitness']
 
     def __init__(self, scriptWitness):
         object.__setattr__(self, 'scriptWitness', scriptWitness)
@@ -365,6 +372,8 @@ class CTxinWitness(ImmutableSerializable):
         return 'CTxinWitness(%r)' % self.scriptWitness
 
 class CTxWitness(ImmutableSerializable):
+    """All the witness data of the transaction.
+    The elements of the vtxinwit array are binded to the elements od vin"""
     __slots__ = ['vtxinwit']
 
     def __init__(self, vtxinwit):
@@ -394,7 +403,7 @@ class CTransaction(ImmutableSerializable):
         vin and vout are iterables of transaction inputs and outputs
         respectively. If their contents are not already immutable, immutable
         copies will be made.
-        TODO: update
+        witness contains the witness script for every input of the transaction
         """
         if not (0 <= nLockTime <= 0xffffffff):
             raise ValueError('CTransaction: nLockTime must be in range 0x0 to 0xffffffff; got %x' % nLockTime)
@@ -409,8 +418,14 @@ class CTransaction(ImmutableSerializable):
 
     @classmethod
     def stream_deserialize(cls, f):
-        # [nVersion][marker][flag][txins][txouts][witness][nLockTime]
-        # [nVersion][txins][txouts][nLockTime]
+        """There are two possible serialization formats:
+        with witness:
+        [nVersion][marker][flag][txins][txouts][witness][nLockTime]
+        marker (1byte): 0 -> discrminate between the serialization formats.
+        witness -> CTxWitness object
+        witout witness (equal to the legacy format):
+        [nVersion][txins][txouts][nLockTime]
+        """
         nVersion = struct.unpack(b"<i", ser_read(f,4))[0]
         vin = VectorSerializer.stream_deserialize(CTxIn, f)
         iswit = 0 == len(vin)
@@ -433,12 +448,12 @@ class CTransaction(ImmutableSerializable):
         return cls(vin, vout, witness, nLockTime, nVersion, flag)
 
     def stream_serialize(self, f):
-        # [nVersion][marker][flag][txins][txouts][witness][nLockTime]
-        # [nVersion][txins][txouts][nLockTime]
+        """See `stream_deserialize`
+        If witness is not defined serialize into legacy format"""
         f.write(struct.pack(b"<i", self.nVersion))
         if self.witness:
             # Add witness
-            FLAG = 1 # FIXME: hard coded?
+            FLAG = 1
             f.write(struct.pack(b"BB", 0, FLAG))  # 0x00 -> marker
         VectorSerializer.stream_serialize(CTxIn, self.vin, f)
         VectorSerializer.stream_serialize(CTxOut, self.vout, f)
@@ -503,7 +518,10 @@ class CMutableTransaction(CTransaction):
         return cls(vin, vout, tx.witness[:], tx.nLockTime, tx.nVersion, tx.flag)
 
     def add_witness(self, stack):
-        self.witness = CTxWitness([CTxinWitness(CScriptWitness(stack))])
+        """Add the witness stack data of a single input of the transaction"""
+        if self.witness == ():
+            self.witness = CTxWitness([])
+        self.witness.vtxinwit.append(CTxinWitness(CScriptWitness(stack)))
 
 class CBlockHeader(ImmutableSerializable):
     """A block header"""
@@ -726,6 +744,7 @@ def CheckTransaction(tx):
         raise CheckTransactionError("CheckTransaction() : vout empty")
 
     # Size limits
+    # FIXME: remove witness before compute the size
     if len(tx.serialize()) > MAX_BLOCK_SIZE:
         raise CheckTransactionError("CheckTransaction() : size limits failed")
 

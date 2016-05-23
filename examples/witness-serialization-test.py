@@ -64,13 +64,11 @@ print(b2x(txin_redeemScript))
 # understand what's happening, as well as read BIP16:
 # https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki
 
-# txin_scriptPubKey = txin_redeemScript.to_p2sh_scriptPubKey()  # old and wrong
 txin_scriptSig = txin_redeemScript.to_nested_p2wsh_scritpSig()
 txin_scriptPubKey = txin_redeemScript.to_nested_p2wsh_scriptPubKey()
 print('pub', b2x(txin_scriptPubKey))
 print('sig', b2x(txin_scriptSig))
 
-# TODO: move this condition to test_segwit
 assert Hash160(txin_scriptSig[1:]) == [y for y in txin_scriptPubKey][1], \
     '%s %s' % (Hash160(txin_scriptSig[1:]), [y for y in txin_scriptPubKey][1])
 

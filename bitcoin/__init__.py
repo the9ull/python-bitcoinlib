@@ -13,9 +13,6 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import bitcoin.core
 
-if bitcoin.__file__.startswith('/home/'):
-    print('[DEBUG]: developement version')
-
 # Note that setup.py can break if __init__.py imports any external
 # dependencies, as these might not be installed when setup.py runs. In this
 # case __version__ could be moved to a separate version.py and imported here.
@@ -48,7 +45,7 @@ class SegNetParams(bitcoin.core.CoreTestNetParams):
     MESSAGE_START = b'\x2e\x96\xea\xca'
     DEFAULT_PORT = 28333
     RPC_PORT = 28332
-    DNS_SEEDS = () # Do they exist? Why not?
+    DNS_SEEDS = ()
     BASE58_PREFIXES = {'PUBKEY_ADDR':30,
                        'SCRIPT_ADDR':50,
                        'SECRET_KEY' :158}

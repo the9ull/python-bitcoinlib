@@ -33,12 +33,6 @@ from bitcoin.wallet import *
 
 class Test_Witness(unittest.TestCase):
 
-    def make_legacy_tx(self):
-
-        tx = CMutableTransaction()
-
-        return tx
-
     def test_segnetparams(self):
 
         def T(addr, scriptPubKey):
@@ -66,7 +60,6 @@ class Test_Witness(unittest.TestCase):
 
         bitcoin.SelectParams('mainnet')
         h = CKey(hashlib.sha256(b'').digest())
-
 
         txin_redeemScript = CScript([OP_1, h.pub, h.pub, OP_2, OP_CHECKMULTISIG])
 
@@ -103,11 +96,84 @@ class Test_Witness(unittest.TestCase):
         # TODO: verify the signature
         # bitcoin.core.scripteval.VerifyScript does not support witness
 
-    def test_padding_error(self):
-        """Deprecatd"""
-        stx = x('0100000002dbb33bdf185b17f758af243c5d3c6e164cc873f6bb9f40c0677d6e0f8ee5afce000000006b4830450221009627444320dc5ef8d7f68f35010b4c050a6ed0d96b67a84db99fda9c9de58b1e02203e4b4aaa019e012e65d69b487fdf8719df72f488fa91506a80c49a33929f1fd50121022b78b756e2258af13779c1a1f37ea6800259716ca4b7f0b87610e0bf3ab52a01ffffffffdbb33bdf185b17f758af243c5d3c6e164cc873f6bb9f40c0677d6e0f8ee5afce010000009300483045022015bd0139bcccf990a6af6ec5c1c52ed8222e03a0d51c334df139968525d2fcd20221009f9efe325476eb64c3958e4713e9eefe49bf1d820ed58d2112721b134e2a1a5303483045022015bd0139bcccf990a6af6ec5c1c52ed8222e03a0d51c334df139968525d2fcd20221009f9efe325476eb64c3958e4713e9eefe49bf1d820ed58d2112721b134e2a1a5303ffffffff01a0860100000000001976a9149bc0bbdd3024da4d0c38ed1aecf5c68dd1d3fa1288ac00000000')
+    def test_deserialization(self):
+        stx = x('0100000002dbb33bdf185b17f758af243c5d3c6e164cc873f6bb9f40c0677'
+                'd6e0f8ee5afce000000006b4830450221009627444320dc5ef8d7f68f3501'
+                '0b4c050a6ed0d96b67a84db99fda9c9de58b1e02203e4b4aaa019e012e65d'
+                '69b487fdf8719df72f488fa91506a80c49a33929f1fd50121022b78b756e2'
+                '258af13779c1a1f37ea6800259716ca4b7f0b87610e0bf3ab52a01fffffff'
+                'fdbb33bdf185b17f758af243c5d3c6e164cc873f6bb9f40c0677d6e0f8ee5'
+                'afce010000009300483045022015bd0139bcccf990a6af6ec5c1c52ed8222'
+                'e03a0d51c334df139968525d2fcd20221009f9efe325476eb64c3958e4713'
+                'e9eefe49bf1d820ed58d2112721b134e2a1a5303483045022015bd0139bcc'
+                'cf990a6af6ec5c1c52ed8222e03a0d51c334df139968525d2fcd20221009f'
+                '9efe325476eb64c3958e4713e9eefe49bf1d820ed58d2112721b134e2a1a5'
+                '303ffffffff01a0860100000000001976a9149bc0bbdd3024da4d0c38ed1a'
+                'ecf5c68dd1d3fa1288ac00000000')
 
         tx2 = CTransaction.deserialize(stx)
+
+    def test_script(self):
+
+        bitcoin.SelectParams('segnet')
+
+        h = CBitcoinSecret.from_secret_bytes(hashlib.sha256(b'test0').digest())
+        k = CBitcoinSecret.from_secret_bytes(hashlib.sha256(b'test1').digest())
+
+        txin_redeemScript = CScript(
+            [OP_1, h.pub, k.pub, OP_2, OP_CHECKMULTISIG])
+
+        txin_scriptSig = txin_redeemScript.to_nested_p2wsh_scritpSig()
+        txin_scriptPubKey = txin_redeemScript.to_nested_p2wsh_scriptPubKey()
+
+        assert Hash160(txin_scriptSig[1:]) == \
+               [y for y in txin_scriptPubKey][1], \
+            '%s %s' % (
+            Hash160(txin_scriptSig[1:]), [y for y in txin_scriptPubKey][1])
+
+        # Input address
+        txin_p2sh_address = CBitcoinAddress.from_scriptPubKey(
+            txin_scriptPubKey)
+
+        txid = lx('022d1cbb635efb150a2b2ff350839d20'
+                  '8f7e9178d37f5fa1e1d69f211ce66327')
+        vout = 0
+
+        txin = CMutableTxIn(COutPoint(txid, vout))
+
+        # Create the txout. This time we create the scriptPubKey from a Bitcoin
+        # address.
+        txout = CMutableTxOut(int(0.000001 * COIN), CBitcoinAddress(
+            'DBbMDdC9jHs9azYdME9xvdwSiiJn45Yyvf').to_scriptPubKey())
+
+        # Create the unsigned transaction.
+        tx = CMutableTransaction([txin], [txout])
+
+        # amount should be obtained by COutPoint
+        sighash = SignatureHash1(txin_redeemScript, tx, 0, int(.0001 * COIN),
+                                 SIGHASH_ALL)
+
+        # Now sign it. We have to append the type of signature we want to the end, in
+        # this case the usual SIGHASH_ALL.
+        sig = h.sign(sighash) + bytes([SIGHASH_ALL])
+
+        # Set the scriptSig of our transaction input appropriately.
+        # OLD >>> txin.scriptSig = CScript([sig, txin_redeemScript])
+
+        txin.scriptSig = txin_scriptSig
+        witness = [b'', sig, txin_redeemScript]
+        # CScript([OP_0, sig, txin_redeemScript])  # OP_0 at start → only if CHECKMULTISIG (bug)
+
+        tx.add_witness(witness)
+
+        # Verify the signature worked. This calls EvalScript() and actually executes
+        # the opcodes in the scripts to see if everything worked out. If it doesn't an
+        # exception will be raised.
+        # VerifyScript(txin.scriptSig, txin_scriptPubKey, tx, 0, (SCRIPT_VERIFY_P2SH,))
+
+        # Done! Print the transaction to standard output with the bytes-to-hex
+        # function.
+        bb = tx.serialize()
 
 class Test_CScriptWitness(unittest.TestCase):
     CScriptWitness
