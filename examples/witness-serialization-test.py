@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 #
 # Copyright (C) 2015 Peter Todd
 #
@@ -46,18 +47,15 @@ if sys.argv[1:]:
 
 
 # Create the (in)famous correct brainwallet secret key.
-h = hashlib.sha256(b'correct horse battery staple/1').digest()
-k = hashlib.sha256(b'current morse battery stable').digest()
-seckey = CBitcoinSecret.from_secret_bytes(h)
+h = CBitcoinSecret.from_secret_bytes(hashlib.sha256(b'correct horse battery staple').digest())
+k = CBitcoinSecret.from_secret_bytes(hashlib.sha256(b'current morse buttery stable').digest())
 # kpub = CBitcoinSecret.from_secret_bytes(k).pub
-kpub = b'\x04' + b'\xfe\x69'*32  # 1+64byte # Funded transaction!
 
 
 # Create a redeemScript. Similar to a scriptPubKey the redeemScript must be
 # satisfied for the funds to be spent.
-txin_redeemScript = CScript([OP_1, seckey.pub, kpub, OP_2, OP_CHECKMULTISIG])
+txin_redeemScript = CScript([OP_1, h.pub, k.pub, OP_2, OP_CHECKMULTISIG])
 print(b2x(txin_redeemScript))
-
 
 # Create the magic P2SH scriptPubKey format from that redeemScript. You should
 # look at the CScript.to_p2sh_scriptPubKey() function in bitcoin.core.script to
@@ -69,13 +67,10 @@ txin_scriptPubKey = txin_redeemScript.to_nested_p2wsh_scriptPubKey()
 print('pub', b2x(txin_scriptPubKey))
 print('sig', b2x(txin_scriptSig))
 
-assert Hash160(txin_scriptSig[1:]) == [y for y in txin_scriptPubKey][1], \
-    '%s %s' % (Hash160(txin_scriptSig[1:]), [y for y in txin_scriptPubKey][1])
-
 # Convert the P2SH scriptPubKey to a base58 Bitcoin address and print it.
 # You'll need to send some funds to it to create a txout to spend.
 txin_p2sh_address = CBitcoinAddress.from_scriptPubKey(txin_scriptPubKey)
-print('Pay to:', str(txin_p2sh_address))
+print('Input address:', str(txin_p2sh_address))
 
 # Same as the txid:vout the createrawtransaction RPC call requires
 #
@@ -128,7 +123,7 @@ sighash = SignatureHash1(txin_redeemScript, tx, 0, int(.0001*COIN), SIGHASH_ALL)
 
 # Now sign it. We have to append the type of signature we want to the end, in
 # this case the usual SIGHASH_ALL.
-sig = seckey.sign(sighash) + bytes([SIGHASH_ALL])
+sig = h.sign(sighash) + bytes([SIGHASH_ALL])
 
 # Set the scriptSig of our transaction input appropriately.
 # OLD >>> txin.scriptSig = CScript([sig, txin_redeemScript])
