@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (C) 2013-2015 The python-bitcoinlib developers
 #
 # This file is part of python-bitcoinlib.
@@ -13,6 +14,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import unittest
 import hashlib
+from io import BytesIO as _BytesIO
 
 import bitcoin
 from bitcoin.core import *
@@ -20,16 +22,6 @@ from bitcoin.core.script import *
 from bitcoin.core.scripteval import *
 from bitcoin.wallet import *
 
-# Cosa posso testare.
-# Le firme non possono essere confrontate staticamente, ogni firma è diversa.
-# Le firme: posso firmare qualcosa e poi verificare che la firma sia corretta. Peccato che non abbia implementato
-# io 'sta cosa, quindi che dovrebbe farci qui?
-# Sarebbe carino farmi verificare cose da Core (ma non posso fargli eseguire script)
-# E regtest? Necessario Core. Potrei rubare del codice python da Core.
-
-# Legacy tx -> get_txid() == GetHash()
-
-# Check SegNetParams
 
 class Test_Witness(unittest.TestCase):
 
@@ -175,14 +167,50 @@ class Test_Witness(unittest.TestCase):
         # function.
         bb = tx.serialize()
 
-class Test_CScriptWitness(unittest.TestCase):
-    CScriptWitness
 
-class Test_CTxInWitness(unittest.TestCase):
-    CTxinWitness
+class Test_CScriptWitness(unittest.TestCase):
+    STACK = [b'\x00', b'\x01\x02']
+    SSTACK = x('020100020102')
+
+    def test_serialize(self):
+        sw = CScriptWitness(self.STACK)
+        self.assertEqual(sw.serialize(), self.SSTACK)
+
+    def test_deserialize(self):
+        sw = CScriptWitness.deserialize(self.SSTACK)
+        self.assertEqual(sw.stack, self.STACK)
+
 
 class Test_CTxWitness(unittest.TestCase):
-    CTxWitness
+    STACK = [b'\x00', b'\x01\x02']
+    STACK2 = [b'\x03', b'\x04\x05\x06']
+    SSTACK = x('020100020102')
+    SSTACK2 = x('02010303040506')
+
+    def test_serialize(self):
+        txw = CTxWitness([])
+        txw.vtxinwit.append(CTxinWitness(CScriptWitness(self.STACK)))
+
+        self.assertEqual(txw.serialize(), self.SSTACK)
+
+        txw.vtxinwit.append(CTxinWitness(CScriptWitness(self.STACK2)))
+
+        self.assertEqual(txw.serialize(), self.SSTACK + self.SSTACK2)
+
+    def test_deserialize(self):
+
+        f = _BytesIO(self.SSTACK)
+        txw = CTxWitness.stream_deserialize(f, 1)
+        self.assertEqual(txw.vtxinwit[0].scriptWitness.stack, self.STACK)
+
+        f = _BytesIO(self.SSTACK2)
+        txw = CTxWitness.stream_deserialize(f, 1)
+        self.assertEqual(txw.vtxinwit[0].scriptWitness.stack, self.STACK2)
+
+        f = _BytesIO(self.SSTACK + self.SSTACK2)
+        txw = CTxWitness.stream_deserialize(f, 2)
+        self.assertEqual(txw.vtxinwit[0].scriptWitness.stack, self.STACK)
+        self.assertEqual(txw.vtxinwit[1].scriptWitness.stack, self.STACK2)
 
 if __name__ == "__main__":
     unittest.main()
